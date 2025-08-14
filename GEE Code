@@ -1,0 +1,450 @@
+//Runoff-based generated R factor improved the RUSLE Model for the Himalayan region by Ankush Kumar
+
+
+//new study area of the Wular lake catchment
+var geometry = StudyArea; 
+Map.addLayer(geometry, {}, 'Study Area');
+Map.centerObject(geometry, 10);
+
+
+var startDate = '2023-01-01';
+var endDate = '2024-01-01';
+
+// Load datasets
+var CHIRPS = ee.ImageCollection('UCSB-CHG/CHIRPS/DAILY');
+var era5Aggr = ee.ImageCollection('ECMWF/ERA5_LAND/DAILY_AGGR');
+var soil = ee.Image("OpenLandMap/SOL/SOL_TEXTURE-CLASS_USDA-TT_M/v02");
+var DEM = ee.Image("USGS/SRTMGL1_003");
+var s2 = ee.ImageCollection('COPERNICUS/S2_HARMONIZED');
+var dynamic_world = ee.ImageCollection("GOOGLE/DYNAMICWORLD/V1");
+var lcz = ee.ImageCollection('RUB/RUBCLIM/LCZ/global_lcz_map/latest');
+
+// **************** Runoff Estimation (NRCS-CN) ***************
+// Load Soil Data
+var soil_class = soil.select('b0').clip(geometry).rename('soil');
+var soil_grp = soil_class.expression(
+    "(b('soil') > 10) ? 1" +
+      ": (b('soil') > 4) ? 2" +
+      ": (b('soil') > 1) ? 3" +
+      ": (b('soil') > 0) ? 4" +
+      ": 0"
+).rename('soil');
+Map.addLayer(soil_grp, {min: 0, max: 4, palette: ['gray', 'yellow', 'green', 'brown', 'red']}, 'Soil Groups', false);
+
+// Load LCZ LULC (2018)
+var lcz_lulc = lcz.mosaic().select('LCZ_Filter').clip(geometry).rename('lulc');
+Map.addLayer(lcz_lulc, {min: 1, max: 17, palette: [
+  '8c0000', 'd10000', 'ff0000', 'bf4d00', 'ff6600',
+  'ff9955', 'faee05', 'bcbcbc', 'ffccaa', '555555',
+  '006a00', '00aa00', '648525', 'b9db79', '000000',
+  'fbf7ae', '6a6aff'
+]}, 'LCZ LULC', false);
+
+// Combine LULC and Soil
+var lulc_soil = lcz_lulc.addBands(soil_grp);
+
+// Create CN map using LCZ classes
+var CN_whole = lulc_soil.expression(
+    "(b('soil') == 1) && (b('lulc') == 1) ? 95" +
+    ": (b('soil') == 1) && (b('lulc') == 2) ? 92" +
+    ": (b('soil') == 1) && (b('lulc') == 3) ? 90" +
+    ": (b('soil') == 1) && (b('lulc') == 4) ? 90" +
+    ": (b('soil') == 1) && (b('lulc') == 5) ? 88" +
+    ": (b('soil') == 1) && (b('lulc') == 6) ? 85" +
+    ": (b('soil') == 1) && (b('lulc') == 7) ? 80" +
+    ": (b('soil') == 1) && (b('lulc') == 8) ? 85" +
+    ": (b('soil') == 1) && (b('lulc') == 9) ? 70" +
+    ": (b('soil') == 1) && (b('lulc') == 10) ? 92" +
+    ": (b('soil') == 1) && (b('lulc') == 11) ? 35" +
+    ": (b('soil') == 1) && (b('lulc') == 12) ? 40" +
+    ": (b('soil') == 1) && (b('lulc') == 13) ? 60" +
+    ": (b('soil') == 1) && (b('lulc') == 14) ? 65" +
+    ": (b('soil') == 1) && (b('lulc') == 15) ? 90" +
+    ": (b('soil') == 1) && (b('lulc') == 16) ? 70" +
+    ": (b('soil') == 1) && (b('lulc') == 17) ? 100" +
+    ": (b('soil') == 2) && (b('lulc') == 1) ? 97" +
+    ": (b('soil') == 2) && (b('lulc') == 2) ? 94" +
+    ": (b('soil') == 2) && (b('lulc') == 3) ? 92" +
+    ": (b('soil') == 2) && (b('lulc') == 4) ? 92" +
+    ": (b('soil') == 2) && (b('lulc') == 5) ? 90" +
+    ": (b('soil') == 2) && (b('lulc') == 6) ? 87" +
+    ": (b('soil') == 2) && (b('lulc') == 7) ? 82" +
+    ": (b('soil') == 2) && (b('lulc') == 8) ? 87" +
+    ": (b('soil') == 2) && (b('lulc') == 9) ? 73" +
+    ": (b('soil') == 2) && (b('lulc') == 10) ? 94" +
+    ": (b('soil') == 2) && (b('lulc') == 11) ? 50" +
+    ": (b('soil') == 2) && (b('lulc') == 12) ? 55" +
+    ": (b('soil') == 2) && (b('lulc') == 13) ? 68" +
+    ": (b('soil') == 2) && (b('lulc') == 14) ? 73" +
+    ": (b('soil') == 2) && (b('lulc') == 15) ? 92" +
+    ": (b('soil') == 2) && (b('lulc') == 16) ? 78" +
+    ": (b('soil') == 2) && (b('lulc') == 17) ? 100" +
+    ": (b('soil') == 3) && (b('lulc') == 1) ? 98" +
+    ": (b('soil') == 3) && (b('lulc') == 2) ? 95" +
+    ": (b('soil') == 3) && (b('lulc') == 3) ? 93" +
+    ": (b('soil') == 3) && (b('lulc') == 4) ? 93" +
+    ": (b('soil') == 3) && (b('lulc') == 5) ? 91" +
+    ": (b('soil') == 3) && (b('lulc') == 6) ? 89" +
+    ": (b('soil') == 3) && (b('lulc') == 7) ? 85" +
+    ": (b('soil') == 3) && (b('lulc') == 8) ? 89" +
+    ": (b('soil') == 3) && (b('lulc') == 9) ? 77" +
+    ": (b('soil') == 3) && (b('lulc') == 10) ? 95" +
+    ": (b('soil') == 3) && (b('lulc') == 11) ? 60" +
+    ": (b('soil') == 3) && (b('lulc') == 12) ? 65" +
+    ": (b('soil') == 3) && (b('lulc') == 13) ? 75" +
+    ": (b('soil') == 3) && (b('lulc') == 14) ? 80" +
+    ": (b('soil') == 3) && (b('lulc') == 15) ? 93" +
+    ": (b('soil') == 3) && (b('lulc') == 16) ? 83" +
+    ": (b('soil') == 3) && (b('lulc') == 17) ? 100" +
+    ": (b('soil') == 4) && (b('lulc') == 1) ? 99" +
+    ": (b('soil') == 4) && (b('lulc') == 2) ? 96" +
+    ": (b('soil') == 4) && (b('lulc') == 3) ? 94" +
+    ": (b('soil') == 4) && (b('lulc') == 4) ? 94" +
+    ": (b('soil') == 4) && (b('lulc') == 5) ? 92" +
+    ": (b('soil') == 4) && (b('lulc') == 6) ? 90" +
+    ": (b('soil') == 4) && (b('lulc') == 7) ? 87" +
+    ": (b('soil') == 4) && (b('lulc') == 8) ? 90" +
+    ": (b('soil') == 4) && (b('lulc') == 9) ? 80" +
+    ": (b('soil') == 4) && (b('lulc') == 10) ? 96" +
+    ": (b('soil') == 4) && (b('lulc') == 11) ? 65" +
+    ": (b('soil') == 4) && (b('lulc') == 12) ? 70" +
+    ": (b('soil') == 4) && (b('lulc') == 13) ? 80" +
+    ": (b('soil') == 4) && (b('lulc') == 14) ? 85" +
+    ": (b('soil') == 4) && (b('lulc') == 15) ? 94" +
+    ": (b('soil') == 4) && (b('lulc') == 16) ? 87" +
+    ": (b('soil') == 4) && (b('lulc') == 17) ? 100" +
+    ": (b('soil') == 0) ? 100" +
+    ": 0"
+).rename('CN2');
+Map.addLayer(CN_whole, {min: 0, max: 100, palette: ['blue', 'green', 'yellow', 'red']}, 'CN2', false);
+
+// Calculate CN1 and CN3
+var CN1 = CN_whole.expression(
+    'CN2 / (2.281 - (0.0128 * CN2))', {'CN2': CN_whole.select('CN2')}
+).rename('CN1');
+var CN3 = CN_whole.expression(
+    'CN2 / (0.427 + (0.00573 * CN2))', {'CN2': CN_whole.select('CN2')}
+).rename('CN3');
+
+// Calculate S values
+var S_image1 = CN1.expression('(25400 / CN1) - 254', {'CN1': CN1.select('CN1')}).rename('S_value1');
+var S_image2 = CN_whole.expression('(25400 / CN2) - 254', {'CN2': CN_whole.select('CN2')}).rename('S_value2');
+var S_image3 = CN3.expression('(25400 / CN3) - 254', {'CN3': CN3.select('CN3')}).rename('S_value3');
+
+// Combine rainfall and ERA5-Land snowfall/snowmelt
+var totalPrecip = CHIRPS.filter(ee.Filter.date(startDate, endDate)).map(function(rainImage) {
+  var time = rainImage.get('system:time_start');
+  var era5Image = era5Aggr.filter(ee.Filter.eq('system:time_start', time)).first();
+  var snowPrecip = ee.Image(0).rename('snow_precip');
+  if (era5Image) {
+    snowPrecip = era5Image.select('snowfall_sum').add(era5Image.select('snowmelt_sum')).multiply(1000);
+  }
+  return rainImage.resample('bilinear').reproject({
+    crs: rainImage.projection(),
+    scale: 100
+  }).clip(geometry)
+    .addBands(snowPrecip)
+    .expression('rain + snow', {
+      'rain': rainImage.select('precipitation'),
+      'snow': snowPrecip
+    }).rename('total_precip')
+    .copyProperties(rainImage, ['system:time_start']);
+});
+
+// Filter valid precipitation images
+var totalPrecipValid = totalPrecip.filter(ee.Filter.listContains('system:band_names', 'total_precip'));
+
+// Calculate 5-day AMC
+var listOfImages = totalPrecipValid.toList(totalPrecipValid.size());
+var calculated_list = listOfImages.map(function(img) {
+  var index = listOfImages.indexOf(img);
+  img = ee.Image(img);
+  var firstIndex = ee.Algorithms.If(index.lte(3), index, index.subtract(4));
+  var firstImage = ee.Image(listOfImages.get(firstIndex));
+  var secondIndex = ee.Algorithms.If(index.lte(3), index, index.subtract(3));
+  var secondImage = ee.Image(listOfImages.get(secondIndex));
+  var thirdIndex = ee.Algorithms.If(index.lte(3), index, index.subtract(2));
+  var thirdImage = ee.Image(listOfImages.get(thirdIndex));
+  var fourthIndex = ee.Algorithms.If(index.lte(3), index, index.subtract(1));
+  var fourthImage = ee.Image(listOfImages.get(fourthIndex));
+  var change = firstImage.add(secondImage).add(thirdImage)
+    .add(fourthImage).add(img).select('total_precip')
+    .rename('total_precip_1')
+    .copyProperties(img, ['system:time_start']);
+  return change;
+});
+
+var AMCcollection = ee.ImageCollection(calculated_list);
+
+// Join Total Precipitation and AMC
+var Join = ee.Join.inner();
+var FilterOnStartTime = ee.Filter.equals({
+  'leftField': 'system:time_start',
+  'rightField': 'system:time_start'
+});
+var precip_AMC = Join.apply(totalPrecipValid, AMCcollection, FilterOnStartTime);
+var MergeBands = function(aRow) {
+  return ee.Image.cat(aRow.get('primary'), aRow.get('secondary'));
+};
+var MergedPrecip_AMC = ee.ImageCollection(precip_AMC.map(MergeBands));
+
+// Calculate Runoff
+var zeroImage = ee.Image(0);
+var runoff = MergedPrecip_AMC.map(function(image) {
+  var AMC = image.select('total_precip_1');
+  var ppt = image.select('total_precip');
+  var AMCreplaced = S_image2.where(AMC.lte(13), S_image1);
+  var AMCreplaced2 = AMCreplaced.where(AMC.gt(28), S_image3);
+  var s_value = AMCreplaced2.select('S_value2');
+  var Q2 = image.expression(
+    '((ppt - (0.2 * S_image)) ** 2) / (ppt - (0.2 * S_image) + S_image)', {
+      'ppt': ppt,
+      'S_image': s_value
+    });
+  var Q3 = Q2.where(ppt.lt(s_value.multiply(0.2)), zeroImage);
+  return Q3.clip(geometry).rename('runoff')
+    .copyProperties(image, ['system:time_start']);
+});
+
+// Sum runoff for annual total
+var runoffSum = runoff.sum().clip(geometry).rename('runoff_sum');
+Map.addLayer(runoffSum, {min: 0, max: 1000, palette: ['blue', 'green', 'yellow', 'red']}, 'Total Runoff 2023', false);
+
+// Export runoff
+Export.image.toDrive({
+  image: runoffSum,
+  description: 'Wular_Lake_NRCSCN_Runoff_2023',
+  folder: 'GEE_Exports',
+  fileNamePrefix: 'Wular_Lake_NRCSCN_Runoff_2023',
+  region: geometry,
+  scale: 100,
+  crs: 'EPSG:4326',
+  maxPixels: 1e10,
+  fileFormat: 'GeoTIFF'
+});
+
+// **************** R Factor ***************
+// Use annual runoff for R factor: R = 1.5 * Q^1.2
+var R = runoffSum.expression(
+  '1.5 * pow(runoff, 1.2)', {
+    'runoff': runoffSum.select('runoff_sum')
+  }).rename('R');
+Map.addLayer(R, {min: 300, max: 900, palette: ['a52508','ff3818','fbff18','25cdff','2f35ff','0b2dab']}, 'R Factor Map', 0);
+
+// **************** K Factor ***************
+soil = soil.select('b0').clip(geometry).rename('soil');
+Map.addLayer(soil, {min: 0, max: 100, palette: ['a52508','ff3818','fbff18','25cdff','2f35ff','0b2dab']}, 'Soil', 0);
+var K = soil.expression(
+    "(b('soil') > 11) ? 0.0053" +
+      ": (b('soil') > 10) ? 0.0170" +
+      ": (b('soil') > 9) ? 0.045" +
+      ": (b('soil') > 8) ? 0.050" +
+      ": (b('soil') > 7) ? 0.0499" +
+      ": (b('soil') > 6) ? 0.0394" +
+      ": (b('soil') > 5) ? 0.0264" +
+      ": (b('soil') > 4) ? 0.0423" +
+      ": (b('soil') > 3) ? 0.0394" +
+      ": (b('soil') > 2) ? 0.036" +
+      ": (b('soil') > 1) ? 0.0341" +
+      ": (b('soil') > 0) ? 0.0288" +
+      ": 0"
+).rename('K').clip(geometry);
+Map.addLayer(K, {min: 0, max: 0.06, palette: ['a52508','ff3818','fbff18','25cdff','2f35ff','0b2dab']}, 'K Factor Map', 0);
+
+// **************** LS Factor ***************
+var elevation = DEM.select('elevation');
+var slope1 = ee.Terrain.slope(elevation).clip(geometry);
+var slope = slope1.divide(180).multiply(Math.PI).tan().multiply(100);
+Map.addLayer(slope, {min: 0, max: 15, palette: ['a52508','ff3818','fbff18','25cdff','2f35ff','0b2dab']}, 'Slope in %', 0);
+var LS4 = Math.sqrt(500/100);
+var LS3 = slope.multiply(0.53);
+var LS2 = slope.multiply(slope.multiply(0.076));
+var LS1 = LS3.add(LS2).add(0.76);
+var LS = LS1.multiply(LS4).rename('LS');
+Map.addLayer(LS, {min: 0, max: 90, palette: ['a52508','ff3818','fbff18','25cdff','2f35ff','0b2dab']}, 'LS Factor Map', 0);
+
+// **************** C Factor ***************
+s2 = s2.filterDate(startDate, endDate).median().clip(geometry);
+var image_ndvi = s2.normalizedDifference(['B8','B4']).rename('NDVI');
+Map.addLayer(image_ndvi, {min: 0, max: 0.85, palette: ['FFFFFF','CC9966','CC9900','996600','33CC00','009900','006600','000000']}, 'NDVI', 0);
+var alpha = ee.Number(-2);
+var beta = ee.Number(1);
+var C1 = image_ndvi.multiply(alpha);
+var oneImage = ee.Image(1).clip(geometry);
+var C2 = oneImage.subtract(image_ndvi);
+var C3 = C1.divide(C2).rename('C3');
+var C4 = C3.exp();
+var maxC4 = C4.reduceRegion({
+  geometry: geometry,
+  reducer: ee.Reducer.max(),
+  scale: 100,
+  maxPixels: 475160679
+});
+var C5 = maxC4.toImage().clip(geometry);
+var minC4 = C4.reduceRegion({
+  geometry: geometry,
+  reducer: ee.Reducer.min(),
+  scale: 100,
+  maxPixels: 475160679
+});
+var C6 = minC4.toImage().clip(geometry);
+var C7 = C4.subtract(C6);
+var C8 = C5.subtract(C6);
+var C = C7.divide(C8).rename('C');
+Map.addLayer(C, {min: 0, max: 1, palette: ['FFFFFF','CC9966','CC9900','996600','33CC00','009900','006600','000000']}, 'C Factor Map', 0);
+
+// **************** P Factor ***************
+var lulc = dynamic_world.filterDate(startDate, endDate).select('label').mosaic().clip(geometry).rename('lulc');
+Map.addLayer(lulc, {min: 0, max: 8, palette: ['419bdf', '397d49', '88b053', '7a87c6', 'e49635', 'dfc35a', 'c4281b', 'a59b8f', 'b39fe1']}, 'Dynamic World LULC', 0);
+// Dynamic World classes: 0=water, 1=trees, 2=grass, 3=flooded_vegetation, 4=crops, 5=shrub_and_scrub, 6=built, 7=bare, 8=snow_and_ice
+var lulc_slope = lulc.addBands(slope);
+var P = lulc_slope.expression(
+    "(b('lulc') == 4) && (b('slope') < 2) ? 0.6" +
+      ": (b('lulc') == 4) && (b('slope') < 5) ? 0.5" +
+      ": (b('lulc') == 4) && (b('slope') < 8) ? 0.5" +
+      ": (b('lulc') == 4) && (b('slope') < 12) ? 0.6" +
+      ": (b('lulc') == 4) && (b('slope') < 16) ? 0.7" +
+      ": (b('lulc') == 4) && (b('slope') < 20) ? 0.8" +
+      ": (b('lulc') == 4) && (b('slope') >= 20) ? 0.9" +
+      ": (b('lulc') == 0) ? 1" +
+      ": (b('lulc') == 6) ? 1" +
+      ": (b('lulc') == 7) ? 1" +
+      ": (b('lulc') == 8) ? 1" +
+      ": 0.8"
+).rename('P').clip(geometry);
+Map.addLayer(P, {min: 0, max: 1, palette: ['blue', 'green', 'yellow', 'red']}, 'P Factor Map', 0);
+
+// **************** Estimating Soil Loss ******************
+var soil_loss = R.multiply(K).multiply(LS).multiply(C).multiply(P).rename('Soil Loss');
+var style = ['490eff', '12f4ff', '12ff50', 'e5ff12', 'ff4812'];
+Map.addLayer(soil_loss, {min: 0, max: 10, palette: style}, 'Soil Loss', 0);
+var SL_class = soil_loss.expression(
+    "(b('Soil Loss') < 5) ? 1" +
+      ": (b('Soil Loss') < 10) ? 2" +
+      ": (b('Soil Loss') < 20) ? 3" +
+      ": (b('Soil Loss') < 40) ? 4" +
+      ": 5"
+).rename('SL_class').clip(geometry);
+Map.addLayer(SL_class, {min: 0, max: 5, palette: style}, 'Soil Loss Class');
+
+// Calculate mean soil loss
+var SL_mean = soil_loss.reduceRegion({
+  geometry: geometry,
+  reducer: ee.Reducer.mean(),
+  scale: 10,
+  maxPixels: 475160679
+});
+print('Mean Soil Loss', SL_mean.get('Soil Loss'));
+
+var maineMeansFeatures = soil_loss.reduceRegions({
+  collection: geometry,
+  reducer: ee.Reducer.mean(),
+  scale: 10
+});
+print('Mean Soil Loss of Each Subbasin', maineMeansFeatures);
+
+// Calculating Area
+var areaImage = ee.Image.pixelArea().addBands(SL_class);
+var areas = areaImage.reduceRegion({
+  reducer: ee.Reducer.sum().group({
+    groupField: 1,
+    groupName: 'class',
+  }),
+  geometry: geometry,
+  scale: 10,
+  maxPixels: 1e10
+});
+var classAreas = ee.List(areas.get('groups'));
+var className = classAreas.map(function(item) {
+  var areaDict = ee.Dictionary(item);
+  var classNumber = ee.Number(areaDict.get('class')).format();
+  return ee.List(classNumber);
+});
+var Area = classAreas.map(function(item) {
+  var areaDict = ee.Dictionary(item);
+  var area = ee.Number(areaDict.get('sum')).divide(1e6).round();
+  return ee.List(area);
+});
+var className2 = ee.List(['Slight (<10)', 'Moderate (10-20)', 'High (20-30)', 'Very high (30-40)', 'Severe (>40)']);
+print(ui.Chart.array.values(Area, 0, className2)
+    .setChartType('PieChart')
+    .setOptions({pointSize: 2, title: 'Soil Loss'}));
+
+// Calculate class area by subbasin
+var calculateClassArea = function(feature) {
+  var areas = ee.Image.pixelArea().addBands(SL_class).reduceRegion({
+    reducer: ee.Reducer.sum().group({
+      groupField: 1,
+      groupName: 'class',
+    }),
+    geometry: feature.geometry(),
+    scale: 10,
+    maxPixels: 1e10
+  });
+  var classAreas = ee.List(areas.get('groups'));
+  var classAreaLists = classAreas.map(function(item) {
+    var areaDict = ee.Dictionary(item);
+    var classNumber = ee.Number(areaDict.get('class')).format();
+    var area = ee.Number(areaDict.get('sum')).round();
+    return ee.List([classNumber, area]);
+  });
+  var result = ee.Dictionary(classAreaLists.flatten());
+  var district = feature.get('HYBAS_ID');
+  return ee.Feature(feature.geometry(), result.set('district', district));
+};
+var districtAreas = geometry.map(calculateClassArea);
+
+// Export to Drive
+var classes = ee.List.sequence(1, 5);
+var outputFields = ee.List(['district']).cat(classes).getInfo();
+Export.table.toDrive({
+  collection: districtAreas,
+  description: 'class_area_by_subbasin',
+  folder: 'earthengine',
+  fileNamePrefix: 'class_area_by_subbasin',
+  fileFormat: 'CSV',
+  selectors: outputFields
+});
+
+// Export soil loss
+Export.image.toDrive({
+  image: soil_loss,
+  description: 'Wular_Lake_Soil_Loss_2023',
+  folder: 'GEE_Exports',
+  fileNamePrefix: 'Wular_Lake_Soil_Loss_2023',
+  region: geometry,
+  scale: 10,
+  crs: 'EPSG:4326',
+  maxPixels: 1e10,
+  fileFormat: 'GeoTIFF'
+});
+
+// Legend Panel
+var legend = ui.Panel({
+  style: {position: 'bottom-left', padding: '8px 15px'}
+});
+var legendTitle = ui.Label({
+  value: 'Soil Loss (t/ha/year)',
+  style: {fontWeight: 'bold', fontSize: '18px', margin: '0 0 4px 0', padding: '0'}
+});
+legend.add(legendTitle);
+var makeRow = function(color, name) {
+  var colorBox = ui.Label({
+    style: {backgroundColor: '#' + color, padding: '8px', margin: '0 0 4px 0'}
+  });
+  var description = ui.Label({
+    value: name,
+    style: {margin: '0 0 4px 6px'}
+  });
+  return ui.Panel({
+    widgets: [colorBox, description],
+    layout: ui.Panel.Layout.Flow('horizontal')
+  });
+};
+var palette = style;
+var names = ['Slight (<10)', 'Moderate (10-20)', 'High (20-30)', 'Very high (30-40)', 'Severe (>40)'];
+for (var i = 0; i < 5; i++) {
+  legend.add(makeRow(palette[i], names[i]));
+}
+Map.add(legend);
+
